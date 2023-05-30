@@ -5,8 +5,8 @@ import numpy as np
 import imutils
 
 # read dry and wet image
-dry = dc.dcmread('C:/Users/ubillusj/Desktop/Almostafa/N2_dry/Raw/0004.dcm')
-wet = dc.dcmread('C:/Users/ubillusj/Desktop/Almostafa/100%_brine/Raw/0004.dcm')
+dry = dc.dcmread('C:/Users/ubillusj/Desktop/Almostafa/Experiment_2/Dry_slow_1/0009.dcm')
+wet = dc.dcmread('C:/Users/ubillusj/Desktop/Almostafa/100%_brine/Raw_wet/0004.dcm')
 
 # get pixel array
 dry_array = dry.pixel_array
@@ -81,18 +81,18 @@ def align_images(dry_array, wet_array, maxFeatures=5000, keepPercent=0.5,debug=F
     ## Return the aligned image
     return aligned
 
-aligned = align_images(img_2d_dry, img_2d_wet, debug=True)
+#aligned = align_images(img_2d_dry, img_2d_wet, debug=True)
 
 def center_image(image):
-  height, width = image.shape
-  print(img.shape)
+  crop_img = image[50:450, 50:450]
+  height, width = crop_img.shape
+  print(crop_img.shape)
   wi=(width/2)
   he=(height/2)
   print(wi,he)
+  #ret,thresh = cv2.threshold(image,95,255,0)
 
-  ret,thresh = cv2.threshold(image,95,255,0)
-
-  M = cv2.moments(thresh)
+  M = cv2.moments(crop_img)
 
   cX = int(M["m10"] / M["m00"])
   cY = int(M["m01"] / M["m00"])
@@ -100,7 +100,7 @@ def center_image(image):
   offsetX = (wi-cX)
   offsetY = (he-cY)
   T = np.float32([[1, 0, offsetX], [0, 1, offsetY]]) 
-  centered_image = cv2.warpAffine(image, T, (width, height))
+  centered_image = cv2.warpAffine(crop_img, T, (width, height))
 
   return centered_image
 
@@ -108,8 +108,10 @@ def center_image(image):
 
 def detect_circles(image):
     fx,fy,fr = 0,0,0
-    output = image.copy()
-    circles = cv2.HoughCircles(image, method = cv2.HOUGH_GRADIENT, dp = 5, minDist = 500,maxRadius=70,minRadius=65)
+    img_dry = image.astype(float)
+    img_2d_dry = (np.maximum(img_dry,0) / img_dry.max()) * 255.0
+    img_2d_dry = np.uint8(img_2d_dry)
+    circles = cv2.HoughCircles(img_2d_dry, method = cv2.HOUGH_GRADIENT, dp = 5, minDist = 500,maxRadius=70,minRadius=65)
 
     if circles is not None:
         circles = np.round(circles[0, :]).astype("int")
@@ -118,24 +120,25 @@ def detect_circles(image):
     return fx, fy, fr
 
 def crop_image(image):
+
     x, y ,r = detect_circles(image)
-    crop_img = image[y-r:y+r, x-r:x+r]
+    print(x,y,r)
 
     # create a mask
-    mask = np.full((crop_img.shape[0], crop_img.shape[1]), 0, dtype=np.uint8) 
+    mask = np.full(image.shape, 0, dtype=np.uint8) 
     # create circle mask, center, radius, fill color, size of the border
-    cv2.circle(mask,(r,r), r, (255,255,255),-1)
+    cv2.circle(mask,(x,y), r, (255,255,255),-1)
     # get only the inside pixels
-    fg = cv2.bitwise_or(crop_img, crop_img, mask=mask)
+    fg = cv2.bitwise_or(image, image, mask=mask)
     
     mask = cv2.bitwise_not(mask)
-    background = np.full(crop_img.shape, 255, dtype=np.uint8)
+    background = np.full(image.shape, 255, dtype=np.uint8)
     bk = cv2.bitwise_or(background, background, mask=mask)
     final = cv2.bitwise_or(fg, bk)
 
-    return plt.imshow(final, cmap=plt.cm.bone)
+    return plt.imshow(final, cmap='gray')
 
 
 #plt.imshow(aligned, cmap=plt.cm.bone)
-
-#crop_image(aligned)
+test = center_image(dry_array)
+crop_image(test)

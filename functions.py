@@ -7,205 +7,89 @@ import scipy.ndimage
 import imutils
 import glob
 from PIL import Image
+import SimpleITK as sitk
+import os
+
+## Read file and normalizing functions
 
 def read_dicom(path):
-
+    'Returns a numpy array of the DCM files, size = (NxNxM)'
     slices = [dicom.read_file(file,force=True).pixel_array for file in sorted(glob.glob(path + '*.dcm'))]
+    slices = np.dstack(slices)
 
     return slices
 
-def convert_grayscale(slices):
-
-    slices_gray = []
-
-    for i in range(len(slices)):
-        img = slices[i].astype(float)
-        img_2d = (np.maximum(img,0) / img.max()) * 255
-        img_2d = np.uint8(img_2d)
-        slices_gray.append(img_2d)
-
-    return slices_gray
-
-def align_images(dry_slices,wet_slices,maxFeatures=500,keepPercent= 0.2, debug=False):
+def read_tif(folder_path,total_scans):
+    'Returns a numpy array of the TIF files, size = (NxNxM)'
+    slices = []
+    for i in range(total_scans):
+        slices.append(np.array(Image.open(folder_path + str(i) + '.tif')))
     
-    wet_aligned = []
+    slices = np.dstack(slices)
 
-    for s in range(len(dry_slices)):
+    return slices
 
-        ## ORB detector (keypoints and descriptors)
+def mask_images(slices,cx,cy,radius):
+    slices_output = slices.copy()
+    height, width = slices.shape[0], slices.shape[1]
+    # create circular mask
+    y, x = np.ogrid[:height, :width]
+    distance_from_center = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+    mask = distance_from_center <= radius
+    circle_array = np.zeros((slices.shape[0],slices.shape[1]))
+    circle_array[mask] = 1
 
-        orb =cv2.ORB_create(maxFeatures)
-        (kpsA, descsA) = orb.detectAndCompute(dry_slices[s], None)
-        (kpsB, descsB) = orb.detectAndCompute(wet_slices[s], None)
+    # apply mask to slices
+    for i in range(slices.shape[2]):
+        slices_output[:,:,i] = slices[:,:,i]*circle_array
 
-        ## Match features
+    final = slices_output[int(cy-radius):int(cy+radius),int(cx-radius):int(cx+radius),:]
 
-        method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
-        matcher = cv2.DescriptorMatcher_create(method)
-        matches = matcher.match(descsA, descsB, None)
+    return final
 
-        ## Sort matches by score
-
-        matches = sorted(matches, key=lambda x:x.distance,reverse=False)
-
-        ## Keep top matches
-        keep = int(len(matches) * keepPercent)
-        matches = matches[:keep]
-
-        # Visualize matches
-        if (debug == True and s == 1000):
-            matchedVis = cv2.drawMatches(dry_slices[s], kpsA, wet_slices[s], kpsB, matches, None)
-            matchedVis = imutils.resize(matchedVis, width=1000)
-            cv2.imshow("Matched Keypoints", matchedVis)
-            cv2.waitKey(0)
-        
-        ## Allocate memory for the keypoints (x, y)-coordinates from the top matches\
-
-        ptsA = np.zeros((len(matches), 2), dtype="float")
-        ptsB = np.zeros((len(matches), 2), dtype="float")
-
-        ## Loop over the top matches
-
-        for (i, m) in enumerate(matches):
-            ## Get the matching keypoints for each of the images
-            ptsA[i] = kpsA[m.queryIdx].pt
-            ptsB[i] = kpsB[m.trainIdx].pt
-
-        ## Compute the homography matrix between the two sets of points
-
-        (H, mask) = cv2.estimateAffinePartial2D(ptsB, ptsA, method=cv2.RANSAC)
-
-        ## Use the homography matrix to align the images
-
-        (h, w) = wet_slices[s].shape[:2]
-        aligned = cv2.warpAffine(wet_slices[s], H, (w, h))
-
-        ## Store aligned image in a new tuple
-
-        wet_aligned.append(aligned)
-
-    return wet_aligned
-
-def center_image(slices):
-
-    centered_slices = []
-
-    for s in range(len(slices)):
-        
-        height, width = slices[s].shape
-        wi, he = width/2, height/2
-        ret,thresh = cv2.threshold(slices[s], 110, 255,cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        M = cv2.moments(thresh)
-        cx = int(M['m10']/M['m00'])
-        cy = int(M['m01']/M['m00'])
-
-        dx = wi-cx
-        dy = he-cy
-
-        T = np.float32([[1,0,dx],[0,1,dy]])
-        dst = cv2.warpAffine(slices[s],T,(width,height))
-
-        centered_slices.append(dst)
-    
-    return centered_slices
-
-def detect_circles(image):
-    x, y, r = 0, 0, 0
-    output = image.copy()
-    output = cv2.medianBlur(output, 5)
-    output = cv2.threshold(output, 110, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    circles = cv2.HoughCircles(image, method = cv2.HOUGH_GRADIENT, dp = 5, minDist = 500,maxRadius=70,minRadius=65)
-
-    if circles is not None:
-        circles = np.round(circles[0, :]).astype("uint8")
-        for (x,y,r) in circles:
-            print(x,y,r)
-            
-    return x,y,r
-
-def circles_list(slices):
-    x, y, r = [], [], []
-    for s in range(len(slices)):
-        output = slices[s].copy()
-        output = cv2.medianBlur(output, 5)
-        output = cv2.threshold(output, 110, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-        circles = cv2.HoughCircles(slices[s], method = cv2.HOUGH_GRADIENT, dp = 5, minDist = 200,maxRadius=70,minRadius=65)
-        if circles is not None:
-            circles = np.round(circles[0, :]).astype("uint8")
-            for (x1,y1,r1) in circles:
-                x.append(x1)
-                y.append(y1)
-                r.append(r1)
-
-    x_mode = stats.mode(x)
-    y_mode = stats.mode(y)
-    r_mode = stats.mode(r)
-
-    return x_mode[0][0], y_mode[0][0], r_mode[0][0]
-
-def mask_images(slices):
-    masked_slices = []
-    x_mode, y_mode, r_mode = circles_list(slices)
-
-    for s in range(len(slices)):
-        x,y,r = detect_circles(slices[s])
-
-        if x != 252:
-            x = 252
-        if y != 248:
-            y = 248
-
-        # create a mask
-        mask = np.full((slices[s].shape[0], slices[s].shape[1]), 0, dtype=np.uint8) 
-        # create circle mask, center, radius, fill color, size of the border
-        cv2.circle(mask,(x,y), r, (255,255,255),-1)
-        # get only the inside pixels
-        fg = cv2.bitwise_or(slices[s], slices[s], mask=mask)
-        
-        mask = cv2.bitwise_not(mask)
-        background = np.full(slices[s].shape, 255, dtype=np.uint8)
-        bk = cv2.bitwise_or(background, background, mask=mask)
-        final = cv2.bitwise_or(fg, bk)
-        cropped = final[150:350,150:350]
-        masked_slices.append(cropped)
-        
-    return masked_slices
-
-def resample(slices, new_spacing=[1,1,1]):
+def resample(slices, new_spacing=[1,1,0.25]):
     resampled = []
     spacing = np.array([0.25,0.25,0.25])
-    slices = np.dstack(slices)
     resize_factor = np.divide(spacing,new_spacing)
     new_real_shape = np.multiply(slices.shape, resize_factor)
     real_resize_factor = np.divide(new_real_shape,slices.shape)
     new_spacing = np.divide(spacing,real_resize_factor)
 
+    resampled = scipy.ndimage.interpolation.zoom(slices, real_resize_factor,order=1)
 
-    resampled = scipy.ndimage.interpolation.zoom(slices, real_resize_factor)
-        
     return resampled
 
 def z_profiling(slices):
     z_profile = []
     number = []
-    for s in range(len(slices)):
-        z_profile.append(np.mean(slices[s]))
+    for s in range(slices.shape[2]):
+        z_profile.append(np.mean(slices[:,:,s]))
         number.append(s)
     
     plt.plot(number,z_profile)
     plt.xlabel('Slice Number')
     plt.ylabel('Mean CT')
     plt.title('Z-Profile')
-    plt.ylim(0,255)
     plt.show()
 
     return z_profile
+
+def histograms(slices):
+    slices = slices[slices != 0 ]
+    plt.hist(slices.flatten(),bins=100, color='c')
+    plt.xlabel('CT')
+    plt.ylabel('Frequency')
+    plt.title('Histogram')
+    plt.show()
+    return 
+
 def save_tif(slices,path):
-    for s in range(len(slices)):
-        im = Image.fromarray(slices[s])
+    for s in range(slices.shape[2]):
+        im = Image.fromarray(slices[:,:,s])
         im.save(path + str(s) + '.tif')
 
     return print('Done')
+
 
 def compare_images(dry_slices,wet_slices,wet_aligned,i=100):
 
@@ -221,4 +105,76 @@ def compare_images(dry_slices,wet_slices,wet_aligned,i=100):
     ax3.title.set_text('Aligned')
     
     return plt.show()
+
+#### Simple ITK functions (hope this works better, trial 1)
+
+def center_itk(scans):
+
+    # Convert the scans into np.float32
+    scans = np.float32(scans)
+
+    # Convert the scans into SimpleITK format
+    sitk_scans = sitk.GetImageFromArray(np.transpose(scans, (2, 0, 1)))
+
+    # Get the center of each slice using the displacement
+    center = []
+    for i in range(sitk_scans.GetSize()[2]):
+        center.append((round(256+0.0056*i),round(244+0.0009*i))) # This is the displacement of the center of the circle (reference is the first scan) (x,y)
+
+    # Define the translation
+    transform = sitk.TranslationTransform(2)
+
+    # Apply translation transform to each slice to align them
+    aligned_scans = []
+    for i in range(sitk_scans.GetSize()[2]):
+        vector = (-(256-center[i][0]),(256-center[i][1])) # the sign defines the orientation of the translation (here, it is opposite) negative move right and down, positive move left and up
+        transform.SetParameters(vector)
+        aligned_scan = sitk.Resample(sitk_scans[:,:,i], sitk_scans[:,:,i], transform, sitk.sitkLinear, 0.0)
+        aligned_scans.append(sitk.GetArrayFromImage(aligned_scan))
+
+    # Convert the list of aligned circles to a NumPy array
+    aligned_array = np.array(np.transpose(aligned_scans, (1, 2, 0)))
+
+    return center, aligned_array
+
+def volume_registration(images_fixed,images_moving):
+
+    # Convert the scans into np.float32
+    images_fixed = np.float32(images_fixed)
+    images_moving = np.float32(images_moving)
+
+    # Convert the scans into SimpleITK format
+    sitk_fixed = sitk.GetImageFromArray(np.transpose(images_fixed, (2, 0, 1)))
+    sitk_moving = sitk.GetImageFromArray(np.transpose(images_moving, (2, 0, 1)))
+
+    # Initialize CenteredTransformInitializer
+    initial_transform = sitk.CenteredTransformInitializer(sitk_fixed, 
+                                                          sitk_moving, 
+                                                          sitk.Euler3DTransform(), 
+                                                          sitk.CenteredTransformInitializerFilter.MOMENTS)
+    
+    # Define the registration method
+    reg = sitk.ImageRegistrationMethod()
+    reg.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+    reg.SetOptimizerAsGradientDescent(learningRate=1.0, numberOfIterations=100, convergenceMinimumValue=1e-6, convergenceWindowSize=10)
+    reg.SetOptimizerScalesFromPhysicalShift()
+    reg.SetInterpolator(sitk.sitkLinear)
+
+    # Define the initial transformation
+    reg.SetInitialTransform(initial_transform, inPlace=False)
+
+    # Run the registration
+    final_transform = reg.Execute(sitk_fixed, sitk_moving)
+
+    # Apply the transformation to the moving image
+    moving_resampled = sitk.Resample(sitk_moving, sitk_fixed, final_transform, sitk.sitkLinear, 0.0, sitk.sitkFloat32)
+
+    # Convert the registered image to a NumPy array
+    registered_array = np.array(np.transpose(sitk.GetArrayFromImage(moving_resampled), (1, 2, 0)))
+
+    return registered_array
+
+
+
+
 
