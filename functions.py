@@ -1,10 +1,8 @@
 import pydicom as dicom
 import matplotlib.pyplot as plt
-import cv2
 import numpy as np
-from scipy import stats
+from scipy import stats 
 import scipy.ndimage
-import imutils
 import glob
 from PIL import Image
 import SimpleITK as sitk
@@ -29,7 +27,7 @@ def read_tif(folder_path,total_scans):
 
     return slices
 
-def mask_images(slices,cx,cy,radius):
+def mask_images(slices,cx,cy,radius,last_slice):
     slices_output = slices.copy()
     height, width = slices.shape[0], slices.shape[1]
     # create circular mask
@@ -43,7 +41,7 @@ def mask_images(slices,cx,cy,radius):
     for i in range(slices.shape[2]):
         slices_output[:,:,i] = slices[:,:,i]*circle_array
 
-    final = slices_output[int(cy-radius):int(cy+radius),int(cx-radius):int(cx+radius),:]
+    final = slices_output[int(cy-radius):int(cy+radius),int(cx-radius):int(cx+radius),0:last_slice]
 
     return final
 
@@ -76,11 +74,20 @@ def z_profiling(slices):
 
 def histograms(slices):
     slices = slices[slices != 0 ]
-    plt.hist(slices.flatten(),bins=100, color='c')
+    mu, std = stats.norm.fit(slices.flatten())
+
+    # Plot the histogram.
+    plt.hist(slices.flatten(),density=True,bins=100, color='c')
+    xmin, xmax = plt.xlim()
+    x = np.linspace(xmin, xmax, 100)
+    p = stats.norm.pdf(x, mu, std)
+    plt.plot(x, p, 'k', linewidth=2)
+    title = "Histogram - Fit results: mu = %.2f,  std = %.2f" % (mu, std)
     plt.xlabel('CT')
     plt.ylabel('Frequency')
-    plt.title('Histogram')
+    plt.title(title)
     plt.show()
+
     return 
 
 def save_tif(slices,path):
@@ -108,8 +115,10 @@ def compare_images(dry_slices,wet_slices,wet_aligned,i=100):
 
 #### Simple ITK functions (hope this works better, trial 1)
 
-def center_itk(scans):
-
+def center_itk(scans,cxi,cyi,cxf,cyf):
+    
+    dx = (cxf-cxi)/scans.shape[2]
+    dy = (cyf-cyi)/scans.shape[2]
     # Convert the scans into np.float32
     scans = np.float32(scans)
 
@@ -119,7 +128,7 @@ def center_itk(scans):
     # Get the center of each slice using the displacement
     center = []
     for i in range(sitk_scans.GetSize()[2]):
-        center.append((round(256+0.0056*i),round(244+0.0009*i))) # This is the displacement of the center of the circle (reference is the first scan) (x,y)
+        center.append((round(cxi+dx*i),round(cyi+dy*i))) # This is the displacement of the center of the circle (reference is the first scan) (x,y)
 
     # Define the translation
     transform = sitk.TranslationTransform(2)
