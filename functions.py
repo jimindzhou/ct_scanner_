@@ -14,7 +14,7 @@ def read_dicom(path):
     'Returns a numpy array of the DCM files, size = (NxNxM)'
     slices = [dicom.read_file(file,force=True).pixel_array for file in sorted(glob.glob(path + '*.dcm'))]
     slices = np.dstack(slices)
-
+    slices = np.flip(slices,2)
     return slices
 
 def read_tif(folder_path,total_scans):
@@ -45,7 +45,15 @@ def mask_images(slices,cx,cy,radius,last_slice):
 
     return final
 
-def resample(slices, new_spacing=[1,1,0.25]):
+def piecewise_average(slices1,slices2):
+    'According to Pini paper averaging over slices reduces the uncertainty of the measurement'
+    n = 2
+    average = np.sum(slices1,slices2)/n
+    
+    return average
+
+def resample(slices,size = 3, new_spacing=[1,1,0.25]):
+    slices = scipy.ndimage.median_filter(slices,size=size)
     resampled = []
     spacing = np.array([0.25,0.25,0.25])
     resize_factor = np.divide(spacing,new_spacing)
@@ -61,6 +69,7 @@ def z_profiling(slices):
     z_profile = []
     number = []
     for s in range(slices.shape[2]):
+        slices[:,:,s] = slices[:,:,s][slices[:,:,s] != 0]
         z_profile.append(np.mean(slices[:,:,s]))
         number.append(s)
     
@@ -79,7 +88,7 @@ def histograms(slices):
     # Plot the histogram.
     plt.hist(slices.flatten(),density=True,bins=100, color='c')
     xmin, xmax = plt.xlim()
-    x = np.linspace(xmin, xmax, 100)
+    x = np.linspace(xmin, xmax, 10000)
     p = stats.norm.pdf(x, mu, std)
     plt.plot(x, p, 'k', linewidth=2)
     title = "Histogram - Fit results: mu = %.2f,  std = %.2f" % (mu, std)
@@ -136,8 +145,8 @@ def center_itk(scans,cxi,cyi,cxf,cyf):
     # Apply translation transform to each slice to align them
     aligned_scans = []
     for i in range(sitk_scans.GetSize()[2]):
-        vector = (-(256-center[i][0]),(256-center[i][1])) # the sign defines the orientation of the translation (here, it is opposite) negative move right and down, positive move left and up
-        transform.SetParameters(vector)
+        vector = ((center[i][0]-256),(center[i][1]-256)) # the sign defines the orientation of the translation (here, it is opposite) negative move right and down, positive move left and up
+        transform.SetOffset(vector)
         aligned_scan = sitk.Resample(sitk_scans[:,:,i], sitk_scans[:,:,i], transform, sitk.sitkLinear, 0.0)
         aligned_scans.append(sitk.GetArrayFromImage(aligned_scan))
 
