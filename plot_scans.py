@@ -52,7 +52,7 @@ def histogram(slices):
 
     return 
 
-def compare_scans(s1,s2,s3,i=256):
+def compare_scans(sdict,i=256):
     '''
     This function compares the CT values of the same slice for three set of scans
     Inputs:
@@ -64,14 +64,12 @@ def compare_scans(s1,s2,s3,i=256):
     Outputs:
         Comparison of the CT values of the same slice for three set of scans
     '''
-
-    fig, (ax1,ax2,ax3) = plt.figure(figsize=(10,10))
-    ax1.imshow(s1[i],cmap='gray')
-    ax1.set_title('Scan 1')
-    ax2.imshow(s2[i],cmap='gray')
-    ax2.set_title('Scan 2')
-    ax3.imshow(s3[i],cmap='gray')
-    ax3.set_title('Scan 3')
+    length = len(sdict)
+    fig, axs = plt.subplots(1, length, figsize=(15, 15))
+    for j, key in enumerate(sdict.keys()):
+        axs[j].imshow(sdict[key][i], cmap="gray")
+        axs[j].set_title(key)
+        axs[j].axis("off")
     
     return plt.show()
 
