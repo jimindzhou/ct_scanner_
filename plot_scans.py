@@ -87,7 +87,7 @@ def plot_slices(slices, nx, ny):
     '''
     dims = slices.shape
     s = np.linspace(0,dims[2]-1,nx*ny).astype(int)
-    fig, axs = plt.subplots(ny, nx, figsize=(15, 15))
+    fig, axs = plt.subplots(ny, nx, figsize=(10, 10))
     for i in range(ny):
         for j in range(nx):
             im = axs[i, j].imshow(slices[:, :, s[i * nx + j]], cmap="gray")
@@ -95,7 +95,6 @@ def plot_slices(slices, nx, ny):
             axs[i, j].axis("off")
 
     fig.colorbar(im, ax=axs.ravel().tolist(), orientation = 'vertical',shrink=0.5,pad=0.04)
-    plt.tight_layout()
 
     return plt.show()
 
