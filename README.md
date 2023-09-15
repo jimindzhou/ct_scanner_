@@ -26,3 +26,4 @@ Function scripts:
 
 Examples/Tutorials:
 - EX1: How to read dicom files, untiltening and registering
+- EX2: How to pre- and postprocess CT data to estimate $CO_2$ saturation along a core sample
