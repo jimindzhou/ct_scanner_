@@ -4,6 +4,7 @@
 ## Collaborators:
 - Jose Ubillus | MS Student
 - Almostafa Alhadi | PhD Student
+- Dr. David DiCarlo | PI
 
 ### Before running the scripts
 We recommend Anaconda as Python/Package manager. If you know how to create environments or already have one defined, make sure you have the following libraries installed in your environment:
@@ -27,3 +28,7 @@ Function scripts:
 Examples/Tutorials:
 - EX1: How to read dicom files, untiltening and registering
 - EX2: How to pre- and postprocess CT data to estimate $CO_2$ saturation along a core sample
+
+### Data availability
+If you need access to the examples data, please contact Dr. David DiCarlo at dicarlo@mail.utexas.edu
+
