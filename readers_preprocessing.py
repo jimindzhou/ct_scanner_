@@ -54,7 +54,8 @@ def mask_images(slices,cx,cy,radius,first_slice,last_slice):
     y, x = np.ogrid[:height, :width]
     distance_from_center = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
     mask = distance_from_center <= radius
-    circle_array = np.zeros((slices.shape[0],slices.shape[1]))
+    #circle_array = np.zeros((slices.shape[0],slices.shape[1]))
+    circle_array = np.full((slices.shape[0],slices.shape[1]),np.nan)
     circle_array[mask] = 1
 
     # apply mask to slices

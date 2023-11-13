@@ -11,10 +11,11 @@ def z_profiling(sdict):
         z_profiles: dictionary of the z-profiles, size = (Mx1)
     '''
     z_profiles= {}
-    for key in sdict.keys():
-        number = np.arange(0,sdict[key].shape[2],1)
-        sdict[key][sdict[key] == 0] = np.nan
-        z_profiles[key] = np.nanmean(sdict[key],axis=(0,1))
+    sdict_copy = sdict.copy()
+    for key in sdict_copy.keys():
+        number = np.arange(0,sdict_copy[key].shape[2],1)
+        sdict_copy[key][sdict_copy[key] == 0] = np.nan
+        z_profiles[key] = np.nanmean(sdict_copy[key],axis=(0,1))
         
         plt.plot(number,z_profiles[key],label=key)
 
@@ -34,12 +35,12 @@ def histogram(slices):
     Outputs:
         Histogram of the CT values
     '''
-
-    slices = slices[slices != 0 ]
-    mu, std = stats.norm.fit(slices.flatten())
+    sl = slices.copy()
+    sl = sl[sl != 0 ]
+    mu, std = stats.norm.fit(sl.flatten())
 
     # Plot the histogram.
-    plt.hist(slices.flatten(),density=True,bins=100, color='c')
+    plt.hist(sl.flatten(),density=True,bins=100, color='c')
     xmin, xmax = mu - 3*std, mu + 3*std
     x = np.linspace(xmin, xmax, 10000)
     p = stats.norm.pdf(x, mu, std)
@@ -127,7 +128,6 @@ def plot_multiple_histograms(s1,s2):
 
     ax.set_xlabel('CT')
     ax.set_ylabel('Frequency')
-    ax.set_xlim(0,2000)
     plt.legend(loc='upper right')
 
     return plt.show()

@@ -17,20 +17,15 @@ def porosity(dry, wet):
         Plots of the porosity estimations
     
     '''
-    wet_temp = wet.copy()
-    dry_temp = dry.copy()
-    wet_temp[wet_temp == 0 ] = np.nan
-    dry_temp[dry_temp == 0 ] = np.nan
-
-    ct_dry_avg = np.nanmean(dry_temp)
-    ct_wet_avg = np.nanmean(wet_temp)
+    ct_dry_avg = np.nanmean(dry)
+    ct_wet_avg = np.nanmean(wet)
 
     # Core level porosity
     por_core = (ct_wet_avg - ct_dry_avg) / (1000-0)
 
     # Slice level porosity
-    slice_dry_avg = np.nanmean(dry_temp, axis=(0,1))
-    slice_wet_avg = np.nanmean(wet_temp, axis=(0,1))
+    slice_dry_avg = np.nanmean(dry, axis=(0,1))
+    slice_wet_avg = np.nanmean(wet, axis=(0,1))
 
     por_slice = (slice_wet_avg - slice_dry_avg) / (1000-0)
 
@@ -74,29 +69,22 @@ def saturation(wet,co2,twophase):
         Plots of the saturation estimations
     
     '''
-    wet_temp = wet.copy()
-    co2_temp = co2.copy()
-    tph_temp = twophase.copy()
-    wet_temp[wet_temp == 0 ] = np.nan
-    co2_temp[co2_temp == 0 ] = np.nan
-    tph_temp[tph_temp == 0 ] = np.nan
-
     # Core level saturation 
-    ctexpr = np.nanmean(tph_temp)
-    ctco2 = np.nanmean(co2_temp)
-    ctwater = np.nanmean(wet_temp)
+    ctexpr = np.nanmean(twophase)
+    ctco2 = np.nanmean(co2)
+    ctwater = np.nanmean(wet)
 
     sat_core = (ctwater - ctexpr) / (ctwater - ctco2)
 
     # Slice level saturation
-    slice_expr_avg = np.nanmean(tph_temp, axis=(0,1))
-    slice_co2_avg = np.nanmean(co2_temp, axis=(0,1))
-    slice_water_avg = np.nanmean(wet_temp, axis=(0,1))
+    slice_expr_avg = np.nanmean(twophase, axis=(0,1))
+    slice_co2_avg = np.nanmean(co2, axis=(0,1))
+    slice_water_avg = np.nanmean(wet, axis=(0,1))
 
     sat_slice = (slice_water_avg - slice_expr_avg) / (slice_water_avg - slice_co2_avg)
 
     # Voxel-level saturation
-    sat_voxel = (wet - twophase) / (wet - co2)
+    sat_voxel = (wet - twophase) / (ctwater - ctco2)
 
     # plot both slice level and multiple-voxel level saturation
     fig, axs = plt.subplots(3,4, figsize=(15, 10),dpi=300)
