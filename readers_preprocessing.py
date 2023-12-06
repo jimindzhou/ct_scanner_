@@ -19,6 +19,36 @@ def read_dicom(path):
     slices = np.flip(slices,2)
     return slices
 
+def save_slices_as_numpy(slices_dict,path):
+    '''
+    Function that saves a dictionary of numpy arrays as numpy files
+    Inputs:
+        slices_dict: dictionary of numpy arrays of the slices, size = (NxNxM)
+        path: path to the folder where the numpy files will be saved
+    
+    Outputs:
+        Numpy files saved in the specified folder
+    '''
+    for key in slices_dict:
+        np.save(path + key + '.npy', slices_dict[key])
+
+    return print('Done')
+
+def read_slices_from_numpy(path,files):
+    '''
+    Function that reads a dictionary of numpy arrays from numpy files
+    Inputs:
+        path: path to the folder where the numpy files are saved
+    
+    Outputs:
+        slices_dict: dictionary of numpy arrays of the slices, size = (NxNxM)
+    '''
+    slices_dict = {}
+    for file in files:
+        slices_dict[file] = np.load(path + file + '.npy')
+
+    return slices_dict
+
 def read_tif(folder_path):
     '''
     Function that reads TIF files and returns a numpy array of the TIF files
@@ -66,10 +96,27 @@ def mask_images(slices,cx,cy,radius,first_slice,last_slice):
 
     return final
 
-def resample(slices,size = 3, new_spacing=[1,1,1]):
+def apply_gaussian(slices,sigma=2):
     '''
-    Voxel coarsening scheme to reduce uncertainty in the CT values. This function
-    will smooth the slices and resample them to a new spacing.
+    Function that applies a Gaussian filter to the slices
+    Inputs:
+        slices: numpy array of the slices, size = (NxNxM)
+        sigma: standard deviation of the Gaussian filter
+
+    Outputs:
+        slices_output: numpy array of the filtered slices, size = (NxNxM)
+    '''
+    slices_output = slices.copy()
+
+    slices_output = scipy.ndimage.gaussian_filter(slices_output,sigma=sigma)
+
+    return slices_output
+
+def resample(slices,size=3, new_spacing=[1,1,1]):
+    '''
+    Voxel coarsening scheme to reduce uncertainty in the CT values. Median filter is
+    used to denoise the saturation and reduce uncertainty. This function will smooth the slices and 
+    resample them to a new spacing.
     Square voxel is suggested for the resampling.
 
     Inputs:

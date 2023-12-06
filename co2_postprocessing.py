@@ -7,7 +7,8 @@ This script contains functions specifically for estimation of porosity and satur
 core samples. CT and heterogeneity projects
 '''
 # Porosity and saturation estimations
-def porosity(dry, wet):
+
+def dashboard_porosity(dry, wet):
     '''
     Function that estimates porosity under three schemes: core level, slice level, and voxel level
     Inputs:
@@ -58,7 +59,7 @@ def porosity(dry, wet):
    
     return plt.show()
 
-def saturation(wet,co2,twophase):
+def dashboard_saturation(wet,co2,twophase):
     '''
     Function that estimates saturation under three schemes: core level, slice level, and voxel level
     Inputs:
@@ -111,3 +112,35 @@ def saturation(wet,co2,twophase):
              fontsize=14, bbox={'facecolor': 'lightblue', 'alpha': 0.5, 'pad': 5})
 
     return plt.show()
+
+## CO2 saturation
+def compute_saturation_along_depth(sat_dict):
+    '''
+    Function that computes the saturation along the depth of the core.
+
+    Inputs:
+        sat_dict: dictionary of the saturation values, size = (NxNxM)
+    Outputs:
+        sat: dictionary of the saturation values along the axis, size = (1,M)
+
+    '''
+    sat = sat_dict.copy()
+    fig,ax = plt.subplots(figsize=(4,7))
+    keys = list(sat.keys())
+    length = len(keys[0])
+    for i in range(len(keys)):
+        sat[keys[i]] = np.nanmean(sat[keys[i]],axis=(0,1))
+        
+    ax.fill_betweenx(np.arange(length),sat[keys[0]],label=keys[0])
+    for j in range(1,len(keys)-1):
+        ax.fill_betweenx(np.arange(length),sat[j],sat[j+1],label=keys[j])
+
+    ax.set_title('Saturation along depth')
+    ax.set_xlabel('Saturation')
+    ax.set_xlim(0,1)
+    ax.set_ylabel('Slice number')
+    ax.legend(loc='center right',bbox_to_anchor=(1.5,0.5))
+    ax.margins(0,0)
+    plt.show()
+
+    return sat
