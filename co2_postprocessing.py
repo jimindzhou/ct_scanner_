@@ -3,36 +3,99 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 '''
-This script contains functions specifically for estimation of porosity and saturation in
-core samples. CT and heterogeneity projects
-'''
-# Porosity and saturation estimations
+This script contains functions specifically for estimation of porosity and  CO2 saturation in
+core samples. The functions are divided into two categories: 1) functions for porosity estimation
+and 2) functions for CO2 saturation estimation at the core level, slice level, and voxel level.
 
-def dashboard_porosity(dry, wet):
+'''
+
+def core_level_porosity(dry, wet):
     '''
-    Function that estimates porosity under three schemes: core level, slice level, and voxel level
+    Function that estimates porosity at the core level assuming dry samples are fully saturated with air and
+    wet samples are fully saturated with water.
     Inputs:
         dry: numpy array of the dry CT scans, size = (NxNxM)
         wet: numpy array of the wet CT scans, size = (NxNxM)
     Outputs:
-        Plots of the porosity estimations
+        por_core: porosity at the core level
     
     '''
     ct_dry_avg = np.nanmean(dry)
     ct_wet_avg = np.nanmean(wet)
 
-    # Core level porosity
-    por_core = (ct_wet_avg - ct_dry_avg) / (1000-0)
+    por_core = (ct_wet_avg - ct_dry_avg) / (1000-0) # 1000 and 0 are the CT values of water and air, respectively
 
-    # Slice level porosity
+    print('Core level porosity estimate: ' + str(round(por_core,3)))
+
+    return por_core
+
+def slice_level_porosity(dry, wet):
+    '''
+    Function that estimates porosity at the slice level assuming dry samples are fully saturated with air and
+    wet samples are fully saturated with water.
+    Inputs:
+        dry: numpy array of the dry CT scans, size = (NxNxM)
+        wet: numpy array of the wet CT scans, size = (NxNxM)
+    Outputs:
+        por_slice: porosity at the slice level
+    
+    '''
     slice_dry_avg = np.nanmean(dry, axis=(0,1))
     slice_wet_avg = np.nanmean(wet, axis=(0,1))
 
-    por_slice = (slice_wet_avg - slice_dry_avg) / (1000-0)
+    por_slice = (slice_wet_avg - slice_dry_avg) / (1000-0) # 1000 and 0 are the CT values of water and air, respectively
 
-    # Voxel-level porosity
-    por_voxel = (wet - dry) / (1000-0)
+    fig, ax = plt.subplots()
+    ax.plot(por_slice,range(len(por_slice)),color='k',linestyle="--",linewidth=2)
+    ax.set_xlabel('Porosity')
+    ax.set_ylabel('Slice')
+    ax.set_xlim(0,0.5)
+    ax.set_title('Slice-level porosity')
 
+    plt.show()
+
+    return por_slice
+
+def voxel_level_porosity(dry, wet):
+    '''
+    Function that estimates porosity at the voxel level assuming dry samples are fully saturated with air and
+    wet samples are fully saturated with water.
+    Inputs:
+        dry: numpy array of the dry CT scans, size = (NxNxM)
+        wet: numpy array of the wet CT scans, size = (NxNxM)
+    Outputs:
+        por_voxel: porosity at the voxel level
+    
+    '''
+    por_voxel = (wet - dry) / (1000-0) # 1000 and 0 are the CT values of water and air, respectively
+
+    dims = por_voxel.shape
+    s = np.linspace(0,dims[2]-1,9).astype(int)
+    fig, axs = plt.subplots(3,3, figsize=(10, 10))
+    for i in range(3):
+        for j in range(3):
+            im = axs[i, j].imshow(por_voxel[:, :, s[i * 3 + j]], cmap="gray")
+            axs[i,j].set_title('Slice ' + str(s[i * 3 + j]))
+            axs[i, j].axis("off")
+
+    fig.colorbar(im, ax=axs.ravel().tolist(), orientation = 'vertical',shrink=0.5,pad=0.04)
+
+    plt.show()
+    return por_voxel
+
+# Porosity and saturation estimations
+
+def dashboard_porosity(por_core,por_slice,por_voxel):
+    '''
+    Function that builds a dashboard of porosity at all levels: core, slice, and voxel
+    Inputs:
+        por_core: porosity at the core level
+        por_slice: porosity at the slice level
+        por_voxel: porosity at the voxel level
+    Outputs:
+        Plots of the porosity estimations
+    
+    '''
     # plot both slice level and multiple-voxel level porosity
     fig, axs = plt.subplots(3,4, figsize=(15, 10),dpi=300)
     gs = axs[0,0].get_gridspec()
@@ -58,6 +121,97 @@ def dashboard_porosity(dry, wet):
              fontsize=14, bbox={'facecolor': 'lightblue', 'alpha': 0.5, 'pad': 5})
    
     return plt.show()
+
+def core_level_saturation(wet,co2,twophase):
+    '''
+    Function that estimates saturation at the core level assuming wet samples are fully saturated with brine,
+    C02 samples are fully saturated with CO2 and twophase saturated with both fluids at multiple times.
+    Inputs:
+        wet: numpy array of the wet CT scans, size = (NxNxM)
+        co2: numpy array of the CO2 CT scans, size = (NxNxM)
+        twophase: dictionary of two-phase CT scans, size = (NxNxM)
+    Output:
+        sat_core: numpy array of saturation at multiple times, size = (1,length of dict)
+    '''
+    ctwater = np.nanmean(wet)
+    ctco2 = np.nanmean(co2)
+    sat_core = {}
+    for key in twophase.keys():
+        ctexpr = np.nanmean(twophase[key])
+        sat_core[key] = (ctwater - ctexpr) / (ctwater - ctco2)
+        
+
+    fig,ax = plt.subplots(figsize = (5,5),dpi=200)
+    ax.bar(np.arange(len(sat_core)),sat_core.values())
+    ax.set_xlabel('Scan')
+    ax.set_ylabel('Saturation')
+    ax.set_title('Core level saturation')
+    ax.set_xticks(range(len(sat_core)))
+    ax.set_xticklabels(sat_core.keys())
+    ax.set_ylim(0,1)
+    plt.show()
+
+    return sat_core
+        
+def compute_saturation_along_depth(wet,co2,twophase):
+    '''
+    Function that computes the saturation along the depth of the core.
+
+    Inputs:
+    wet: numpy array of the wet CT scans, size = (NxNxM)
+    co2: numpy array of the CO2 CT scans, size = (NxNxM)
+    twophase: dictionary of two-phase CT scans, size = (NxNxM)
+    Outputs:
+        sat_slice: dictionary of the saturation values along the axis, size = (1,M)
+
+    '''
+    
+    ctco2 = np.nanmean(co2)
+    ctwater = np.nanmean(wet)
+    sat = {}
+    for key in twophase.keys():
+        sat[key] = (wet - twophase[key])/(ctwater - ctco2)
+        sat[key] = np.nanmean(sat[key],axis=(0,1))
+    # Slice level saturation
+ 
+    fig,ax = plt.subplots(figsize=(4,7))
+    keys = list(sat.keys())
+    print(keys)
+    length = len(sat[keys[0]])
+        
+    ax.fill_betweenx(np.arange(length),sat[keys[0]],label=keys[0])
+    for j in range(0,len(keys)-1):
+        ax.fill_betweenx(np.arange(length),sat[keys[j]],sat[keys[j+1]],label=keys[j+1])
+
+    ax.set_title('Saturation along depth')
+    ax.set_xlabel('Saturation')
+    ax.set_xlim(0,1)
+    ax.set_ylabel('Slice number')
+    ax.legend(loc='center right',bbox_to_anchor=(1.5,0.5))
+    ax.margins(0,0)
+    plt.show()
+
+    return sat
+
+def voxel_level_saturation(wet,co2,twophase):
+    '''
+    Function that estimates saturation at the voxel level assuming wet samples are fully saturated with brine,
+    C02 samples are fully saturated with CO2 and twophase saturated with both fluids at multiple times.
+    Inputs:
+        wet: numpy array of the wet CT scans, size = (NxNxM)
+        co2: numpy array of the CO2 CT scans, size = (NxNxM)
+        twophase: dictionary of two-phase CT scans, size = (NxNxM)
+    Output:
+        sat_voxel: numpy array of saturation at multiple times, size = (NxNxM,length of dict)
+    '''
+
+    ctco2 = np.nanmean(co2)
+    ctwater = np.nanmean(wet)
+    sat_voxel = {}
+    for key in twophase.keys():
+        sat_voxel[key] = (wet - twophase[key])/(ctwater - ctco2)
+    
+    return sat_voxel
 
 def dashboard_saturation(wet,co2,twophase):
     '''
@@ -103,7 +257,7 @@ def dashboard_saturation(wet,co2,twophase):
     s = np.linspace(0,sat_voxel.shape[2]-1,12).astype(int)
     for i in range(3):
         for j in range(3):
-            im = axs[i, j+1].imshow(sat_voxel[:, :, s[i * 3 + j]], cmap="jet",vmin=0,vmax=1)
+            im = axs[i, j+1].imshow(sat_voxel[:, :, s[i * 3 + j]], cmap="jet",interpolation='bilinear',vmin=0,vmax=1)
             axs[i,j+1].set_title('Slice ' + str(s[i * 3 + j]))
             axs[i, j+1].axis("off")
     
@@ -112,35 +266,3 @@ def dashboard_saturation(wet,co2,twophase):
              fontsize=14, bbox={'facecolor': 'lightblue', 'alpha': 0.5, 'pad': 5})
 
     return plt.show()
-
-## CO2 saturation
-def compute_saturation_along_depth(sat_dict):
-    '''
-    Function that computes the saturation along the depth of the core.
-
-    Inputs:
-        sat_dict: dictionary of the saturation values, size = (NxNxM)
-    Outputs:
-        sat: dictionary of the saturation values along the axis, size = (1,M)
-
-    '''
-    sat = sat_dict.copy()
-    fig,ax = plt.subplots(figsize=(4,7))
-    keys = list(sat.keys())
-    length = len(keys[0])
-    for i in range(len(keys)):
-        sat[keys[i]] = np.nanmean(sat[keys[i]],axis=(0,1))
-        
-    ax.fill_betweenx(np.arange(length),sat[keys[0]],label=keys[0])
-    for j in range(1,len(keys)-1):
-        ax.fill_betweenx(np.arange(length),sat[j],sat[j+1],label=keys[j])
-
-    ax.set_title('Saturation along depth')
-    ax.set_xlabel('Saturation')
-    ax.set_xlim(0,1)
-    ax.set_ylabel('Slice number')
-    ax.legend(loc='center right',bbox_to_anchor=(1.5,0.5))
-    ax.margins(0,0)
-    plt.show()
-
-    return sat

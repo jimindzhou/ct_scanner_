@@ -64,13 +64,11 @@ def read_tif(folder_path):
     
     return slices
 
-def mask_images(slices,cx,cy,radius,first_slice,last_slice):
+def mask_images(slices,radius,first_slice,last_slice):
     '''
     This functions creates a circular mask around the center of the slices
     Inputs:
         slices: numpy array of the slices, size = (NxNxM)
-        cx: x coordinate of the center of the circle
-        cy: y coordinate of the center of the circle
         radius: radius of the circle
         first_slice: first slice to be included in the mask
         last_slice: last slice to be included in the mask
@@ -80,12 +78,13 @@ def mask_images(slices,cx,cy,radius,first_slice,last_slice):
     '''
     slices_output = slices.copy()
     height, width = slices.shape[0], slices.shape[1]
+    cx = height/2 ; cy = width/2
     # create circular mask
     y, x = np.ogrid[:height, :width]
     distance_from_center = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
     mask = distance_from_center <= radius
-    #circle_array = np.zeros((slices.shape[0],slices.shape[1]))
-    circle_array = np.full((slices.shape[0],slices.shape[1]),np.nan)
+    #circle_array = np.zeros((height,width))
+    circle_array = np.full((height,width),np.nan)
     circle_array[mask] = 1
 
     # apply mask to slices
@@ -96,11 +95,13 @@ def mask_images(slices,cx,cy,radius,first_slice,last_slice):
 
     return final
 
-def apply_gaussian(slices,sigma=2):
+def apply_gaussian(slices,radius=1,order=0,sigma=2):
     '''
     Function that applies a Gaussian filter to the slices
     Inputs:
         slices: numpy array of the slices, size = (NxNxM)
+        radius: radius of the Gaussian filter
+        order: order of the Gaussian filter (0 = Gaussian, 1 = first derivative, 2 = second derivative)
         sigma: standard deviation of the Gaussian filter
 
     Outputs:
@@ -108,11 +109,11 @@ def apply_gaussian(slices,sigma=2):
     '''
     slices_output = slices.copy()
 
-    slices_output = scipy.ndimage.gaussian_filter(slices_output,sigma=sigma)
+    slices_output = scipy.ndimage.gaussian_filter(slices_output,radius=radius,sigma=sigma,order=order)
 
     return slices_output
 
-def resample(slices,size=3, new_spacing=[1,1,1]):
+def resample(slices,size=3,resolution = [0.25,0.25,0.25], new_spacing=[1,1,1]):
     '''
     Voxel coarsening scheme to reduce uncertainty in the CT values. Median filter is
     used to denoise the saturation and reduce uncertainty. This function will smooth the slices and 
@@ -122,6 +123,7 @@ def resample(slices,size=3, new_spacing=[1,1,1]):
     Inputs:
         slices: numpy array of the slices, size = (NxNxM)
         size: size of the median filter
+        resolution: voxel dimensions of the slices
         new_spacing: new voxel dimensions
 
     Outputs:
@@ -129,7 +131,7 @@ def resample(slices,size=3, new_spacing=[1,1,1]):
     '''
     slices = scipy.ndimage.median_filter(slices,size=size)
     resampled = []
-    spacing = np.array([0.25,0.25,0.25])
+    spacing = np.array(resolution)
     resize_factor = np.divide(spacing,new_spacing)
     new_real_shape = np.multiply(slices.shape, resize_factor)
     real_resize_factor = np.divide(new_real_shape,slices.shape)
@@ -170,8 +172,14 @@ def center_itk(scans,cxi,cyi,cxf,cyf):
     Outputs:
         aligned_array: numpy array of the aligned scans, size = (NxNxM)
     '''
-    dx = (cxf-cxi)/scans.shape[2]
-    dy = (cyf-cyi)/scans.shape[2]
+    # Translation variables
+    length = scans.shape[2]
+    width = scans.shape[0]
+    cx = width/2
+    cy = width/2
+    dx = (cxf-cxi)/length
+    dy = (cyf-cyi)/length
+
     # Convert the scans into np.float32
     scans = np.float32(scans)
 
@@ -189,7 +197,7 @@ def center_itk(scans,cxi,cyi,cxf,cyf):
     # Apply translation transform to each slice to align them
     aligned_scans = []
     for i in range(sitk_scans.GetSize()[2]):
-        vector = ((center[i][0]-256),(center[i][1]-256)) # the sign defines the orientation of the translation (here, it is opposite) negative move right and down, positive move left and up
+        vector = ((center[i][0]-cx),(center[i][1]-cy)) # the sign defines the orientation of the translation (here, it is opposite) negative move right and down, positive move left and up
         transform.SetOffset(vector)
         aligned_scan = sitk.Resample(sitk_scans[:,:,i], sitk_scans[:,:,i], transform, sitk.sitkLinear, 0.0)
         aligned_scans.append(sitk.GetArrayFromImage(aligned_scan))
