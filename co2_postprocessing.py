@@ -166,17 +166,16 @@ def compute_saturation_along_depth(wet,co2,twophase):
 
     '''
     
-    ctco2 = np.nanmean(co2)
-    ctwater = np.nanmean(wet)
+    ctco2 = np.nanmean(co2,axis=(0,1))
+    ctwater = np.nanmean(wet,axis=(0,1))
     sat = {}
     for key in twophase.keys():
-        sat[key] = (wet - twophase[key])/(ctwater - ctco2)
-        sat[key] = np.nanmean(sat[key],axis=(0,1))
+        sat[key] = (ctwater - np.nanmean(twophase[key],axis=(0,1)))/(ctwater - ctco2)
+        #sat[key] = np.nanmean(sat[key],axis=(0,1))
     # Slice level saturation
  
     fig,ax = plt.subplots(figsize=(4,7))
     keys = list(sat.keys())
-    print(keys)
     length = len(sat[keys[0]])
         
     ax.fill_betweenx(np.arange(length),sat[keys[0]],label=keys[0])
