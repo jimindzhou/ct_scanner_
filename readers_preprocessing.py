@@ -4,6 +4,115 @@ import scipy.ndimage
 import glob
 from PIL import Image
 import SimpleITK as sitk
+import os 
+
+def list_files_in_folder(folder_path, include_extension=False, include_hidden=False):
+    """
+    Returns a list of file names within the specified folder, with or without extensions.
+    
+    Parameters:
+    folder_path (str): Path to the folder
+    include_extension (bool): Whether to include file extensions in the returned names
+                             (default: False)
+    include_hidden (bool): Whether to include hidden files like ._* files (default: False)
+    
+    Returns:
+    list: List of file names (not including directories)
+    """
+    try:
+        # Check if the path exists and is a directory
+        if not os.path.exists(folder_path):
+            raise FileNotFoundError(f"The folder path '{folder_path}' does not exist")
+        if not os.path.isdir(folder_path):
+            raise NotADirectoryError(f"'{folder_path}' is not a directory")
+            
+        # Get all items in the directory
+        all_items = os.listdir(folder_path)
+        
+        # Filter to only include files (not directories)
+        files_only = [item for item in all_items 
+                     if os.path.isfile(os.path.join(folder_path, item))]
+        
+        # Filter out hidden files if requested
+        if not include_hidden:
+            files_only = [file for file in files_only if not file.startswith('._')]
+        
+        # Remove extensions if required
+        if not include_extension:
+            # Use a set to eliminate duplicates when extensions are removed
+            files_only = list(set([os.path.splitext(file)[0] for file in files_only]))
+        
+        return files_only
+    
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
+    
+
+def list_folders(directory_path, modified=False):
+    """
+    Returns a list of folder names within the specified directory.
+    If modified=True, returns only the characters before the second underscore.
+    
+    Args:
+        directory_path (str): Path to the directory to scan
+        modified (bool): Whether to modify names to get text before second underscore
+        
+    Returns:
+        list: List of folder names (not including files)
+    """
+    # Check if the directory exists
+    if not os.path.exists(directory_path):
+        print(f"Error: The directory '{directory_path}' does not exist.")
+        return []
+    
+    # Check if the path is actually a directory
+    if not os.path.isdir(directory_path):
+        print(f"Error: '{directory_path}' is not a directory.")
+        return []
+    
+    # Get all folders (excluding files)
+    folders = [item for item in os.listdir(directory_path) 
+               if os.path.isdir(os.path.join(directory_path, item))]
+    
+    # If modified flag is True, extract text before second underscore
+    if modified:
+        modified_folders = []
+        for folder in folders:
+            # Find positions of underscores
+            first_underscore = folder.find('_')
+            if first_underscore != -1:
+                # Find second underscore only if first was found
+                second_underscore = folder.find('_', first_underscore + 1)
+                if second_underscore != -1:
+                    # Get text up to second underscore
+                    modified_folders.append(folder[:second_underscore])
+                else:
+                    # If there's no second underscore, keep full name
+                    modified_folders.append(folder)
+            else:
+                # If there's no underscore at all, keep full name
+                modified_folders.append(folder)
+        return modified_folders
+    
+    return folders
+
+def get_text_before_second_underscore(text):
+    # Find the position of the first underscore
+    first_underscore = text.find('_')
+    
+    # If first underscore exists, look for second underscore
+    if first_underscore != -1:
+        # Find second underscore, starting search after first underscore
+        second_underscore = text.find('_', first_underscore + 1)
+        
+        # If second underscore exists, return everything before it
+        if second_underscore != -1:
+            return text[:second_underscore]
+    
+    # Return original string if there aren't two underscores
+    return text
+
 
 def read_dicom(path):
     '''
@@ -14,25 +123,52 @@ def read_dicom(path):
     Outputs:
         slices: numpy array of the DICOM files, size = (NxNxM)
     '''
-    slices = [dicom.read_file(file,force=True).pixel_array for file in sorted(glob.glob(path + '*.dcm'))]
+    slices = [dicom.dcmread(file,force=True).pixel_array for file in sorted(glob.glob(path + '*.dcm'))]
     slices = np.dstack(slices)
     slices = np.flip(slices,2)
     return slices
 
-def save_slices_as_numpy(slices_dict,path):
+def save_slices_as_numpy(slices_dict, path, overwrite=False):
     '''
-    Function that saves a dictionary of numpy arrays as numpy files
+    Function that saves a dictionary of numpy arrays as numpy files without overwriting existing files
+    
     Inputs:
         slices_dict: dictionary of numpy arrays of the slices, size = (NxNxM)
         path: path to the folder where the numpy files will be saved
+        overwrite: boolean to indicate whether to overwrite existing files (default: False)
     
     Outputs:
         Numpy files saved in the specified folder
+        Returns a list of files that were not saved due to existing files
     '''
+    # Make sure path ends with a slash
+    if not path.endswith('/') and not path.endswith('\\'):
+        path = path + '/'
+    
+    # Check if the directory exists, if not create it
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+    skipped_files = []
+    saved_files = []
+    
     for key in slices_dict:
-        np.save(path + key + '.npy', slices_dict[key])
-
-    return print('Done')
+        file_path = path + key + '.npy'
+        
+        # Check if the file already exists
+        if os.path.exists(file_path) and not overwrite:
+            skipped_files.append(key)
+            continue
+        
+        # Save the file
+        np.save(file_path, slices_dict[key])
+        saved_files.append(key)
+    
+    print(f"Saved {len(saved_files)} files.")
+    if skipped_files:
+        print(f"Skipped {len(skipped_files)} existing files: {', '.join(skipped_files)}")
+    
+    return saved_files, skipped_files
 
 def read_slices_from_numpy(path,files):
     '''
@@ -45,7 +181,7 @@ def read_slices_from_numpy(path,files):
     '''
     slices_dict = {}
     for file in files:
-        slices_dict[file] = np.load(path + file + '.npy')
+        slices_dict[file] = np.load(path + file + '.npy',allow_pickle=True)
 
     return slices_dict
 
